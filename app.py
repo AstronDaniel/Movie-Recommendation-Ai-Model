@@ -236,7 +236,7 @@ def render_movie_grid(movies, recommender=None, key_prefix="grid"):
                     else:
                         st.markdown(f"<div style='height: 200px; background: #333; display: flex; align-items: center; justify-content: center; color: white;'>{movie['title'][0]}</div>", unsafe_allow_html=True)
                     
-                    st.markdown(f"<div class='movie-card-title'>{movie['title']}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='movie-card-title' title='{movie['title']}'>{movie['title']}</div>", unsafe_allow_html=True)
                     st.markdown(f"<div class='movie-card-meta'><span>{movie.get('year', '')}</span><span class='movie-card-rating'>★ {movie.get('rating', 0)}</span></div>", unsafe_allow_html=True)
                     
                     if st.button("Details", key=f"{key_prefix}_btn_{row_idx}_{col_idx}_{movie['title']}"):
