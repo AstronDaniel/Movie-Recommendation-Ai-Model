@@ -5,8 +5,12 @@ Fetches movie artwork and metadata from TMDB (The Movie Database) API
 
 import requests
 import os
-from typing import Optional, Dict
+from typing import Optional, Dict, List, Tuple
 from functools import lru_cache
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 
 class MovieAPI:
@@ -135,6 +139,37 @@ class MovieAPI:
             print(f"Error fetching movie details for '{title}': {e}")
             return movie_data
     
+    def get_movie_videos(self, movie_id: int) -> list:
+        """
+        Get videos (trailers, teasers, etc.) for a movie
+        
+        Args:
+            movie_id: TMDB Movie ID
+            
+        Returns:
+            List of video dictionaries
+        """
+        if not self.api_key or not movie_id:
+            return []
+            
+        try:
+            url = f"{self.base_url}/movie/{movie_id}/videos"
+            params = {
+                'api_key': self.api_key,
+                'language': 'en-US'
+            }
+            
+            response = requests.get(url, params=params, timeout=5)
+            response.raise_for_status()
+            
+            data = response.json()
+            print(f"Video data for movie ID {movie_id}: {data}")
+            return data.get('results', [])
+            
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching videos for movie ID {movie_id}: {e}")
+            return []
+
     def get_poster_url_batch(self, movies: list) -> Dict[str, str]:
         """
         Get poster URLs for multiple movies (with caching)
@@ -181,6 +216,14 @@ class MovieAPI:
         genre_ids = data.get('genre_ids', [])
         genres = [genre_map.get(gid, str(gid)) for gid in genre_ids]
         
+        poster_path = data.get('poster_path')
+        if poster_path and poster_path.startswith('/'):
+            poster_path = f"{self.image_base_url}{poster_path}"
+            
+        backdrop_path = data.get('backdrop_path')
+        if backdrop_path and backdrop_path.startswith('/'):
+            backdrop_path = f"https://image.tmdb.org/t/p/w1280{backdrop_path}"
+        
         return {
             'title': data.get('title', ''),
             'genre': ' '.join(genres), 
@@ -188,9 +231,10 @@ class MovieAPI:
             'rating': data.get('vote_average', 0),
             'director': 'Unknown', 
             'description': data.get('overview', ''),
-            'poster_path': data.get('poster_path'),
-            'backdrop_path': data.get('backdrop_path'),
-            'id': data.get('id')
+            'poster_path': poster_path,
+            'backdrop_path': backdrop_path,
+            'id': data.get('id'),
+            'movie_id': data.get('id')
         }
 
     def search_movies(self, query: str) -> list:
@@ -278,3 +322,62 @@ class MovieAPI:
         except requests.exceptions.RequestException as e:
             print(f"Error fetching top rated movies: {e}")
             return []
+
+    def discover_movies(
+        self, 
+        genre_ids: List[int] = None, 
+        year_range: Tuple[int, int] = None,
+        rating_min: float = None
+    ) -> list:
+        """
+        Discover movies using TMDB API with filters
+        
+        Args:
+            genre_ids: List of genre IDs to filter by
+            year_range: Tuple of (start_year, end_year) to filter by release year
+            rating_min: Minimum average rating to filter by
+            
+        Returns:
+            List of discovered movies
+        """
+        if not self.api_key:
+            return []
+            
+        try:
+            url = f"{self.base_url}/discover/movie"
+            params = {
+                'api_key': self.api_key,
+                'language': 'en-US',
+                'sort_by': 'popularity.desc',
+                'page': 1
+            }
+            
+            if genre_ids:
+                params['with_genres'] = ','.join(map(str, genre_ids))
+                
+            if year_range:
+                params['primary_release_date.gte'] = f"{year_range[0]}-01-01"
+                params['primary_release_date.lte'] = f"{year_range[1]}-12-31"
+                
+            if rating_min is not None:
+                params['vote_average.gte'] = rating_min
+            
+            response = requests.get(url, params=params, timeout=5)
+            response.raise_for_status()
+            
+            data = response.json()
+            results = []
+            if data.get('results'):
+                genre_map = self._get_genre_map()
+                for item in data['results']:
+                    results.append(self._format_movie_data(item, genre_map))
+            return results
+            
+        except requests.exceptions.RequestException as e:
+            print(f"Error discovering movies: {e}")
+            return []
+
+    def get_genre_id_map(self) -> Dict[str, int]:
+        """Get mapping of genre name to ID"""
+        genre_map = self._get_genre_map()
+        return {name: id for id, name in genre_map.items()}

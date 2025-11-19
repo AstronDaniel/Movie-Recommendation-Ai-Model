@@ -5,6 +5,12 @@ Streamlit App for Movie Recommendation System - Netflix Style
 import streamlit as st
 import pandas as pd
 from pathlib import Path
+from dotenv import load_dotenv
+import os
+
+# Load environment variables
+load_dotenv()
+
 from movie_recommender import MovieRecommender
 
 # Page configuration
@@ -33,10 +39,10 @@ load_css()
 
 # Initialize the recommender system
 @st.cache_resource
-def load_recommender():
+def get_recommender_system():
     return MovieRecommender()
 
-recommender = load_recommender()
+recommender = get_recommender_system()
 
 # Clear cache button in sidebar (for development) - show warning if method missing
 if not hasattr(recommender, 'get_poster_url'):
@@ -124,62 +130,119 @@ def get_movie_description(movie, recommender=None):
     # Return description or default
     return description if description and description.strip() else 'No description available.'
 
-# Helper function to create movie card HTML
-def create_movie_card(movie, index=None, score=None, poster_url=None, recommender=None):
-    """Create a Netflix-style movie card with hover description"""
-    title = movie['title']
-    genre = movie['genre']
-    year = movie['year']
-    rating = movie['rating']
-    director = movie.get('director', 'N/A')
+# Movie Details Modal
+@st.dialog("Movie Details")
+def show_movie_details(movie):
+    st.markdown(f"## {movie['title']}")
     
-    # Get description, with fallback to recommender
-    description = get_movie_description(movie, recommender)
+    # Create tabs for Overview and Trailer
+    tab_overview, tab_trailer = st.tabs(["Overview", "Trailer"])
     
-    # Truncate description for display
-    desc_short = (description[:120] + '...') if len(description) > 120 and description != 'No description available.' else description
-    
-    # Get poster URL or use placeholder
-    if poster_url:
-        poster_html = f'<img src="{poster_url}" alt="{title}" class="poster-image" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';">'
-        poster_fallback = f'<div class="poster-fallback" style="display: none;">{title[0] if title else "M"}</div>'
-    else:
-        # Get first letter for poster placeholder
-        poster_letter = title[0] if title else 'M'
-        poster_html = ''
-        poster_fallback = f'<div class="poster-fallback">{poster_letter}</div>'
-    
-    score_html = ""
-    if score is not None:
-        score_html = f'<div class="rating-badge" style="margin-top: 0.5rem;">{score}% Match</div>'
-    
-    # Escape HTML special characters
-    title_escaped = title.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
-    genre_escaped = genre.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;') if genre else 'Movie'
-    desc_escaped = desc_short.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
-    
-    # Create description overlay
-    description_overlay = f'<div class="movie-description-overlay"><div class="description-text">{desc_escaped}</div></div>'
-    
-    return f'<div class="movie-card"><div class="movie-poster">{poster_html}{poster_fallback}{description_overlay}</div><div class="movie-info"><div class="movie-title">{title_escaped}</div><div class="movie-meta"><div>{year} • {genre_escaped.split()[0] if genre_escaped else "Movie"}</div><div class="movie-rating">Rating: {rating}/10</div>{score_html}</div></div></div>'
+    with tab_overview:
+        col1, col2 = st.columns([1, 2])
+        
+        with col1:
+            poster_url = movie.get('poster_path') or movie.get('poster_url')
+            
+            # Fix for raw TMDB paths if they somehow sneak in
+            if poster_url and isinstance(poster_url, str) and poster_url.startswith('/'):
+                poster_url = f"https://image.tmdb.org/t/p/w500{poster_url}"
+                
+            if poster_url:
+                st.image(poster_url, use_container_width=True)
+            else:
+                st.markdown(f"<div style='height: 300px; background: #333; display: flex; align-items: center; justify-content: center; color: white; font-size: 2rem;'>{movie['title'][0]}</div>", unsafe_allow_html=True)
+                
+        with col2:
+            st.markdown(f"""
+            <div class="modal-meta">
+                <span>{movie.get('year', 'N/A')}</span>
+                <span>{movie.get('genre', 'Unknown')}</span>
+                <span style="color: #46d369">Match: {movie.get('rating', 0)}/10</span>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown(f"### Overview")
+            st.markdown(f"<div class='modal-overview'>{movie.get('description', 'No description available.')}</div>", unsafe_allow_html=True)
+            
+            # Rating in modal
+            current_rating = st.session_state.user_ratings.get(movie['title'], 0.0)
+            new_rating = st.slider("Rate this movie", 0.0, 5.0, float(current_rating), 0.5, key=f"modal_rate_{movie['title']}")
+            
+            if st.button("Save Rating", key=f"save_rate_{movie['title']}"):
+                st.session_state.user_ratings[movie['title']] = new_rating
+                st.success("Rating saved!")
+                st.rerun()
 
-# Helper function to create horizontal scrolling row
-def create_movie_row(title, movies, scores=None, recommender=None):
-    """Create a horizontal scrolling row of movies"""
-    movies_html = ""
-    for i, movie in enumerate(movies):
-        score = scores[i] if scores and i < len(scores) else None
-        # Get poster URL from recommender if available
-        poster_url = None
-        if recommender and hasattr(recommender, 'get_poster_url'):
+    with tab_trailer:
+        # Fetch and display trailer
+        movie_id = movie.get('movie_id') or movie.get('id')
+        if movie_id:
             try:
-                poster_url = recommender.get_poster_url(movie.get('title', ''))
-            except AttributeError:
-                # If method doesn't exist (cached old version), skip poster
-                poster_url = None
-        movies_html += create_movie_card(movie, i, score, poster_url, recommender)
+                with st.spinner("Loading trailer..."):
+                    videos = recommender.movie_api.get_movie_videos(movie_id)
+                    # Filter for YouTube trailers
+                    trailers = [v for v in videos if v.get('site') == 'YouTube' and v.get('type') == 'Trailer']
+                    
+                    if trailers:
+                        # Get the first trailer
+                        trailer_key = trailers[0].get('key')
+                        if trailer_key:
+                            st.video(f"https://www.youtube.com/watch?v={trailer_key}")
+                        else:
+                            st.info("Trailer video unavailable.")
+                    else:
+                        st.info("No trailer available for this movie.")
+            except Exception as e:
+                st.error(f"Could not load trailer. Error: {str(e)}")
+        else:
+            st.warning("Cannot load trailer: Movie ID missing.")
+
+# Helper function to render a grid of movies
+def render_movie_grid(movies, recommender=None, key_prefix="grid"):
+    """Render movies in a responsive grid"""
+    if not movies:
+        st.warning("No movies to display.")
+        return
+
+    # CSS for grid container
+    st.markdown('<div class="movie-grid-container">', unsafe_allow_html=True)
     
-    return f'<div class="movie-row"><div class="row-title">{title}</div><div class="movie-scroll-container">{movies_html}</div></div>'
+    # Calculate rows
+    cols_per_row = 5
+    rows = [movies[i:i + cols_per_row] for i in range(0, len(movies), cols_per_row)]
+    
+    for row_idx, row_movies in enumerate(rows):
+        cols = st.columns(cols_per_row)
+        for col_idx, movie in enumerate(row_movies):
+            with cols[col_idx]:
+                # Get poster
+                poster_url = movie.get('poster_path')
+                
+                # Fix for raw TMDB paths
+                if poster_url and isinstance(poster_url, str) and poster_url.startswith('/'):
+                    poster_url = f"https://image.tmdb.org/t/p/w500{poster_url}"
+                
+                if not poster_url and recommender:
+                     poster_url = recommender.get_poster_url(movie['title'])
+                
+                # Update movie dict with poster for modal
+                movie['poster_url'] = poster_url
+                
+                # Render Card
+                with st.container(border=True):
+                    if poster_url:
+                        st.image(poster_url, use_container_width=True)
+                    else:
+                        st.markdown(f"<div style='height: 200px; background: #333; display: flex; align-items: center; justify-content: center; color: white;'>{movie['title'][0]}</div>", unsafe_allow_html=True)
+                    
+                    st.markdown(f"<div class='movie-card-title'>{movie['title']}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='movie-card-meta'><span>{movie.get('year', '')}</span><span class='movie-card-rating'>★ {movie.get('rating', 0)}</span></div>", unsafe_allow_html=True)
+                    
+                    if st.button("Details", key=f"{key_prefix}_btn_{row_idx}_{col_idx}_{movie['title']}"):
+                        show_movie_details(movie)
+                        
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # Main content
 tab1, tab2, tab3, tab4 = st.tabs([
@@ -206,25 +269,92 @@ with tab1:
         st.markdown("<br>", unsafe_allow_html=True)  # Spacing
         search_button = st.button("Search", key="search_btn", use_container_width=True)
     
-    # Display movies
-    if search_query or search_button:
+    # Advanced Filters & Random
+    with st.expander("Advanced Filters & Discovery", expanded=False):
+        f_col1, f_col2, f_col3 = st.columns(3)
+        
+        # Get data for filters
+        all_movies_df = recommender.get_all_movies()
+        min_year = int(all_movies_df['year'].replace('', 0).astype(float).min()) if not all_movies_df.empty else 1900
+        max_year = int(all_movies_df['year'].replace('', 2025).astype(float).max()) if not all_movies_df.empty else 2025
+        if min_year == 0: min_year = 1900 # Handle case where year might be 0
+        
+        with f_col1:
+            available_genres = recommender.get_genres()
+            selected_genres = st.multiselect("Filter by Genre", available_genres, key="filter_genres")
+            
+        with f_col2:
+            selected_years = st.slider("Release Year", min_year, max_year, (min_year, max_year), key="filter_years")
+            
+        with f_col3:
+            selected_ratings = st.slider("Minimum Rating", 0.0, 10.0, (0.0, 10.0), step=0.5, key="filter_ratings")
+            
+        col_filter, col_random = st.columns([1, 1])
+        with col_filter:
+            apply_filters = st.button("Apply Filters", key="apply_filters_btn", use_container_width=True)
+        with col_random:
+            random_btn = st.button("🎲 Surprise Me!", key="random_btn", use_container_width=True, help="Get 10 random movie recommendations")
+    
+    # Logic for what to display
+    if random_btn:
+        st.session_state.view_mode = 'random'
+    elif search_query or search_button:
+        st.session_state.view_mode = 'search'
+    elif apply_filters:
+        st.session_state.view_mode = 'filtered'
+    elif 'view_mode' not in st.session_state:
+        st.session_state.view_mode = 'popular'
+
+    # Display based on view mode
+    if st.session_state.view_mode == 'random':
+        st.markdown("### 🎲 Random Picks For You")
+        if st.button("← Back to Popular", key="back_random"):
+            st.session_state.view_mode = 'popular'
+            st.rerun()
+            
+        random_movies = recommender.get_random_movies(10)
+        render_movie_grid(random_movies, recommender=recommender, key_prefix="random")
+
+    elif st.session_state.view_mode == 'filtered':
+        st.markdown("### Filtered Results")
+        if st.button("Clear Filters", key="clear_filters"):
+            st.session_state.view_mode = 'popular'
+            st.rerun()
+            
+        with st.spinner("Filtering and fetching more movies from TMDB..."):
+            filtered_df = recommender.filter_movies(
+                genres=selected_genres,
+                year_range=selected_years,
+                rating_range=selected_ratings,
+                fetch_from_api=True
+            )
+        
+        if not filtered_df.empty:
+            st.markdown(f"Found {len(filtered_df)} movies matching your criteria")
+            render_movie_grid(filtered_df.to_dict('records'), recommender=recommender, key_prefix="filtered")
+        else:
+            st.info("No movies match your filters. Try adjusting your criteria.")
+
+    elif st.session_state.view_mode == 'search':
         movies = recommender.search_movies(search_query)
         if not movies.empty:
             movies_list = movies.to_dict('records')
-            st.markdown(create_movie_row(f"Search Results ({len(movies)} movies)", movies_list, recommender=recommender), unsafe_allow_html=True)
+            st.markdown(f"### Search Results ({len(movies)} movies)")
+            render_movie_grid(movies_list, recommender=recommender, key_prefix="search")
         else:
             st.info("No movies found. Try a different search term.")
-    else:
-        # Show all movies in horizontal scrolling rows
+            if st.button("Clear Search", key="clear_search"):
+                st.session_state.view_mode = 'popular'
+                st.rerun()
+
+    else: # popular
+        # Show all movies in grid
+        st.markdown("### Popular Movies")
         all_movies = recommender.get_all_movies()
         movies_list = all_movies.to_dict('records')
         
-        # Split into rows of 10 movies each
-        row_size = 10
-        for i in range(0, len(movies_list), row_size):
-            row_movies = movies_list[i:i+row_size]
-            row_title = f"All Movies" if i == 0 else f"All Movies (continued)"
-            st.markdown(create_movie_row(row_title, row_movies, recommender=recommender), unsafe_allow_html=True)
+        # Render grid
+        render_movie_grid(movies_list, recommender=recommender, key_prefix="popular")
             
         # Load More button
         st.markdown("<br>", unsafe_allow_html=True)
@@ -270,7 +400,8 @@ with tab2:
                 
                 if recommendations:
                     scores = [rec.get('similarity_score', 0) for rec in recommendations]
-                    st.markdown(create_movie_row(f"Movies similar to {selected_movie}", recommendations, scores, recommender=recommender), unsafe_allow_html=True)
+                    st.markdown(f"### Movies similar to {selected_movie}")
+                    render_movie_grid(recommendations, recommender=recommender, key_prefix="similar")
                 else:
                     st.warning("No recommendations found.")
     
@@ -296,7 +427,8 @@ with tab2:
                     
                     if recommendations:
                         scores = [rec.get('recommendation_score', 0) for rec in recommendations]
-                        st.markdown(create_movie_row("Personalized Recommendations For You", recommendations, scores, recommender=recommender), unsafe_allow_html=True)
+                        st.markdown("### Personalized Recommendations For You")
+                        render_movie_grid(recommendations, recommender=recommender, key_prefix="personalized")
     
     else:  # Top Rated
         st.markdown("### Popular and highly-rated movies")
@@ -309,7 +441,8 @@ with tab2:
             top_movies = all_movies.nlargest(n_recommendations, 'rating')
             top_movies_list = top_movies.to_dict('records')
             
-            st.markdown(create_movie_row(f"Top {n_recommendations} Rated Movies", top_movies_list, recommender=recommender), unsafe_allow_html=True)
+            st.markdown(f"### Top {n_recommendations} Rated Movies")
+            render_movie_grid(top_movies_list, recommender=recommender, key_prefix="top_rated")
 
 with tab3:
     st.markdown("### Rate Movies")
@@ -334,7 +467,9 @@ with tab3:
         full_movie = recommender.movies_df[recommender.movies_df['title'] == movie_to_rate]
         if not full_movie.empty:
             movie_dict['description'] = full_movie.iloc[0].get('description', 'No description available.')
-    st.markdown(create_movie_row("Selected Movie", [movie_dict], recommender=recommender), unsafe_allow_html=True)
+    
+    st.markdown("### Selected Movie")
+    render_movie_grid([movie_dict], recommender=recommender, key_prefix="rate_selected")
     
     col1, col2 = st.columns([2, 1])
     
@@ -388,8 +523,9 @@ with tab4:
         # Sort by user rating
         rated_movies_list.sort(key=lambda x: x['user_rating'], reverse=True)
         
-        # Display in horizontal scrolling row
-        st.markdown(create_movie_row("Your Rated Movies", rated_movies_list, recommender=recommender), unsafe_allow_html=True)
+        # Display in grid
+        st.markdown("### Your Rated Movies")
+        render_movie_grid(rated_movies_list, recommender=recommender, key_prefix="my_list")
         
         # Statistics
         st.divider()

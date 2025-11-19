@@ -19,7 +19,8 @@ class MovieRecommender:
         self.tfidf_matrix = None
         self.cosine_sim = None
         self.user_ratings = {}
-        self.movie_api = MovieAPI(api_key="492515ee8d49d249c115ba85fa3bebb9")
+        # API key is loaded from environment variable in MovieAPI
+        self.movie_api = MovieAPI()
         self.poster_cache = {}  # Cache for poster URLs
         self._initialize_movies()
         self._load_posters()
@@ -307,3 +308,113 @@ class MovieRecommender:
         else:
             # Use collaborative filtering or top-rated for cold start
             return self.get_collaborative_recommendations(user_id, n_recommendations)
+    
+    def get_genres(self) -> List[str]:
+        """Get list of all unique genres available in the dataset"""
+        if self.movies_df is None or self.movies_df.empty:
+            return []
+        
+        # Common TMDB genres
+        common_genres = [
+            "Action", "Adventure", "Animation", "Comedy", "Crime", "Documentary", 
+            "Drama", "Family", "Fantasy", "History", "Horror", "Music", "Mystery", 
+            "Romance", "Science Fiction", "TV Movie", "Thriller", "War", "Western"
+        ]
+        
+        # Filter to only include genres that actually exist in our dataframe
+        existing_genres = []
+        for genre in common_genres:
+            if self.movies_df['genre'].str.contains(genre, case=False).any():
+                existing_genres.append(genre)
+                
+        return sorted(existing_genres)
+
+    def filter_movies(
+        self, 
+        genres: List[str] = None, 
+        year_range: Tuple[int, int] = None, 
+        rating_range: Tuple[float, float] = None,
+        fetch_from_api: bool = True
+    ) -> pd.DataFrame:
+        """Filter movies by genre, year, and rating, optionally fetching more from API"""
+        
+        # If requested, fetch more movies from API matching criteria
+        if fetch_from_api:
+            try:
+                # Convert genre names to IDs
+                genre_ids = []
+                if genres:
+                    genre_name_map = self.movie_api.get_genre_id_map()
+                    for g in genres:
+                        # Handle potential case mismatches or partial matches
+                        for name, gid in genre_name_map.items():
+                            if g.lower() == name.lower():
+                                genre_ids.append(gid)
+                                break
+                
+                # Fetch from API
+                min_rating = rating_range[0] if rating_range else None
+                new_movies_data = self.movie_api.discover_movies(
+                    genre_ids=genre_ids,
+                    year_range=year_range,
+                    rating_min=min_rating
+                )
+                
+                # Add to dataframe
+                if new_movies_data:
+                    new_movies = []
+                    existing_titles = set(self.movies_df['title'].values) if self.movies_df is not None else set()
+                    
+                    for movie in new_movies_data:
+                        if movie['title'] not in existing_titles:
+                            new_movies.append(movie)
+                    
+                    if new_movies:
+                        new_df = pd.DataFrame(new_movies)
+                        # Ensure columns match
+                        for col in self.movies_df.columns:
+                            if col not in new_df.columns:
+                                new_df[col] = ''
+                        new_df = new_df[self.movies_df.columns]
+                        
+                        self.movies_df = pd.concat([self.movies_df, new_df], ignore_index=True)
+                        self._update_content_features()
+            except Exception as e:
+                print(f"Error fetching filtered movies from API: {e}")
+
+        if self.movies_df is None or self.movies_df.empty:
+            return pd.DataFrame()
+            
+        mask = pd.Series(True, index=self.movies_df.index)
+        
+        # Filter by genre (OR logic - if movie has ANY of the selected genres)
+        if genres:
+            genre_mask = pd.Series(False, index=self.movies_df.index)
+            for genre in genres:
+                genre_mask |= self.movies_df['genre'].str.contains(genre, case=False, na=False)
+            mask &= genre_mask
+            
+        # Filter by year
+        if year_range:
+            min_year, max_year = year_range
+            # Convert year to numeric, coercing errors to NaN
+            years = pd.to_numeric(self.movies_df['year'], errors='coerce')
+            mask &= (years >= min_year) & (years <= max_year)
+            
+        # Filter by rating
+        if rating_range:
+            min_rating, max_rating = rating_range
+            ratings = pd.to_numeric(self.movies_df['rating'], errors='coerce')
+            mask &= (ratings >= min_rating) & (ratings <= max_rating)
+            
+        return self.movies_df[mask][['movie_id', 'title', 'genre', 'year', 'rating', 'director', 'description']]
+
+    def get_random_movies(self, n: int = 10) -> List[Dict]:
+        """Get n random movies from the dataset"""
+        if self.movies_df is None or self.movies_df.empty:
+            return []
+            
+        n = min(n, len(self.movies_df))
+        random_movies = self.movies_df.sample(n=n)
+        
+        return random_movies.to_dict('records')
