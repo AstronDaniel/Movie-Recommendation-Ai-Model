@@ -8,6 +8,7 @@ import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from typing import List, Dict, Tuple
+from movie_api import MovieAPI
 
 
 class MovieRecommender:
@@ -18,72 +19,47 @@ class MovieRecommender:
         self.tfidf_matrix = None
         self.cosine_sim = None
         self.user_ratings = {}
+        self.movie_api = MovieAPI(api_key="492515ee8d49d249c115ba85fa3bebb9")
+        self.poster_cache = {}  # Cache for poster URLs
         self._initialize_movies()
+        self._load_posters()
         
     def _initialize_movies(self):
-        """Initialize with a sample movie dataset"""
-        # Sample movie dataset with genres, directors, and descriptions
-        movies_data = {
-            'movie_id': range(1, 21),
-            'title': [
-                'The Shawshank Redemption', 'The Godfather', 'The Dark Knight',
-                'Pulp Fiction', 'Forrest Gump', 'Inception', 'The Matrix',
-                'Goodfellas', 'The Silence of the Lambs', 'Interstellar',
-                'The Green Mile', 'Saving Private Ryan', 'The Prestige',
-                'The Departed', 'Gladiator', 'The Lion King', 'Titanic',
-                'Avatar', 'Avengers: Endgame', 'Joker'
-            ],
-            'genre': [
-                'Drama Crime', 'Crime Drama', 'Action Crime Drama',
-                'Crime Drama', 'Drama Romance', 'Action Sci-Fi Thriller',
-                'Action Sci-Fi', 'Crime Drama', 'Crime Drama Thriller',
-                'Adventure Drama Sci-Fi', 'Crime Drama Fantasy', 'Drama War',
-                'Drama Mystery Sci-Fi', 'Crime Drama Thriller', 'Action Drama',
-                'Animation Adventure Drama', 'Drama Romance', 'Action Adventure Fantasy',
-                'Action Adventure Sci-Fi', 'Crime Drama Thriller'
-            ],
-            'director': [
-                'Frank Darabont', 'Francis Ford Coppola', 'Christopher Nolan',
-                'Quentin Tarantino', 'Robert Zemeckis', 'Christopher Nolan',
-                'Lana Wachowski', 'Martin Scorsese', 'Jonathan Demme',
-                'Christopher Nolan', 'Frank Darabont', 'Steven Spielberg',
-                'Christopher Nolan', 'Martin Scorsese', 'Ridley Scott',
-                'Roger Allers', 'James Cameron', 'James Cameron',
-                'Anthony Russo', 'Todd Phillips'
-            ],
-            'year': [
-                1994, 1972, 2008, 1994, 1994, 2010, 1999, 1990, 1991, 2014,
-                1999, 1998, 2006, 2006, 2000, 1994, 1997, 2009, 2019, 2019
-            ],
-            'rating': [9.3, 9.2, 9.0, 8.9, 8.8, 8.8, 8.7, 8.7, 8.6, 8.6,
-                      8.6, 8.6, 8.5, 8.5, 8.5, 8.5, 7.9, 7.8, 8.4, 8.4],
-            'description': [
-                'Two imprisoned men bond over years finding redemption through acts of common decency',
-                'The aging patriarch of an organized crime dynasty transfers control to his reluctant son',
-                'Batman raises the stakes in his war on crime with the help of Lt. Gordon and Harvey Dent',
-                'The lives of two mob hitmen a boxer and a pair of diner bandits intertwine',
-                'The presidencies of Kennedy and Johnson through the perspective of an Alabama man',
-                'A thief who steals corporate secrets through dream-sharing technology',
-                'A computer hacker learns about the true nature of reality and his role in the war',
-                'The story of Henry Hill and his life in the mob',
-                'A young FBI cadet must receive help from an incarcerated cannibal killer',
-                'A team of explorers travel through a wormhole in space',
-                'The lives of guards on Death Row are affected by one of their charges',
-                'Following the Normandy Landings a group sets out to find a paratrooper',
-                'After a tragic accident two stage magicians engage in a battle to create the ultimate illusion',
-                'An undercover cop and a mole in the police try to identify each other',
-                'A former Roman General sets out to exact vengeance against the corrupt emperor',
-                'Lion cub prince flees his kingdom only to learn the true meaning of responsibility',
-                'A seventeen-year-old aristocrat falls in love with a kind but poor artist',
-                'A paraplegic Marine dispatched to the moon Pandora on a unique mission',
-                'After the devastating events the Avengers assemble once more to reverse Thanos actions',
-                'In Gotham City mentally troubled comedian Arthur Fleck turns to a life of crime'
-            ]
-        }
+        """Initialize with popular movies from TMDB"""
+        # Fetch popular movies
+        popular_movies = self.movie_api.get_popular_movies(page=1)
         
-        self.movies_df = pd.DataFrame(movies_data)
+        if not popular_movies:
+            # Fallback to empty DataFrame with correct columns if API fails
+            self.movies_df = pd.DataFrame(columns=[
+                'movie_id', 'title', 'genre', 'year', 'rating', 
+                'director', 'description', 'content', 'poster_path', 'backdrop_path'
+            ])
+            self.tfidf_matrix = None
+            self.cosine_sim = None
+            return
+
+        self.movies_df = pd.DataFrame(popular_movies)
         
+        # Ensure all required columns exist
+        required_columns = ['movie_id', 'title', 'genre', 'year', 'rating', 'director', 'description']
+        for col in required_columns:
+            if col not in self.movies_df.columns:
+                self.movies_df[col] = ''
+                
+        self._update_content_features()
+
+    def _update_content_features(self):
+        """Update TF-IDF and Cosine Similarity matrices"""
+        if self.movies_df is None or self.movies_df.empty:
+            return
+
         # Create content features by combining genre, director, and description
+        # Handle missing values
+        self.movies_df['genre'] = self.movies_df['genre'].fillna('')
+        self.movies_df['director'] = self.movies_df['director'].fillna('Unknown')
+        self.movies_df['description'] = self.movies_df['description'].fillna('')
+        
         self.movies_df['content'] = (
             self.movies_df['genre'] + ' ' + 
             self.movies_df['director'] + ' ' + 
@@ -92,22 +68,78 @@ class MovieRecommender:
         
         # Create TF-IDF matrix for content-based filtering
         tfidf = TfidfVectorizer(stop_words='english')
-        self.tfidf_matrix = tfidf.fit_transform(self.movies_df['content'])
+        try:
+            self.tfidf_matrix = tfidf.fit_transform(self.movies_df['content'])
+            # Compute cosine similarity matrix
+            self.cosine_sim = cosine_similarity(self.tfidf_matrix, self.tfidf_matrix)
+        except ValueError:
+            # Handle case with empty vocabulary or other issues
+            self.tfidf_matrix = None
+            self.cosine_sim = None
+    
+    def _load_posters(self):
+        """Load movie poster URLs from API"""
+        if self.movies_df is not None:
+            movies_list = self.movies_df.to_dict('records')
+            poster_urls = self.movie_api.get_poster_url_batch(movies_list)
+            self.poster_cache = poster_urls
         
-        # Compute cosine similarity matrix
-        self.cosine_sim = cosine_similarity(self.tfidf_matrix, self.tfidf_matrix)
+    def get_poster_url(self, title: str) -> str:
+        """
+        Get poster URL for a movie
+        
+        Args:
+            title: Movie title
+            
+        Returns:
+            Poster URL or None if not found
+        """
+        # Check cache first
+        if title in self.poster_cache:
+            return self.poster_cache[title]
+        
+        # Try to fetch from API
+        movie_data = self.movies_df[self.movies_df['title'] == title]
+        if not movie_data.empty:
+            year = movie_data.iloc[0]['year']
+            poster_url = self.movie_api.get_movie_poster_url(title, year)
+            if poster_url:
+                self.poster_cache[title] = poster_url
+                return poster_url
+        
+        return None
         
     def get_all_movies(self) -> pd.DataFrame:
         """Return all movies in the dataset"""
-        return self.movies_df[['movie_id', 'title', 'genre', 'year', 'rating', 'director']]
+        return self.movies_df[['movie_id', 'title', 'genre', 'year', 'rating', 'director', 'description']]
     
     def search_movies(self, query: str) -> pd.DataFrame:
-        """Search for movies by title"""
+        """Search for movies by title using TMDB API"""
         if not query:
             return self.get_all_movies()
         
+        # Search via API
+        results = self.movie_api.search_movies(query)
+        
+        if not results:
+            return pd.DataFrame()
+            
+        # Add new movies to our dataset
+        new_movies = []
+        existing_titles = set(self.movies_df['title'].values) if self.movies_df is not None else set()
+        
+        for movie in results:
+            if movie['title'] not in existing_titles:
+                new_movies.append(movie)
+        
+        if new_movies:
+            new_df = pd.DataFrame(new_movies)
+            self.movies_df = pd.concat([self.movies_df, new_df], ignore_index=True)
+            self._update_content_features()
+            
+        # Filter and return results
         mask = self.movies_df['title'].str.contains(query, case=False, na=False)
-        return self.movies_df[mask][['movie_id', 'title', 'genre', 'year', 'rating', 'director']]
+        return self.movies_df[mask][['movie_id', 'title', 'genre', 'year', 'rating', 'director', 'description']]
     
     def get_content_based_recommendations(
         self, 
@@ -148,6 +180,7 @@ class MovieRecommender:
                 'year': movie['year'],
                 'rating': movie['rating'],
                 'director': movie['director'],
+                'description': movie.get('description', 'No description available.'),
                 'similarity_score': round(score * 100, 2)
             })
         
@@ -178,6 +211,7 @@ class MovieRecommender:
                     'year': row['year'],
                     'rating': row['rating'],
                     'director': row['director'],
+                    'description': row.get('description', 'No description available.'),
                     'recommendation_reason': 'Top Rated'
                 }
                 for _, row in top_movies.iterrows()
@@ -222,11 +256,42 @@ class MovieRecommender:
                 'year': movie['year'],
                 'rating': movie['rating'],
                 'director': movie['director'],
+                'description': movie.get('description', 'No description available.'),
                 'recommendation_score': round(score * 100, 2)
             })
         
         return recommendations
     
+    def load_more_popular_movies(self, page: int) -> pd.DataFrame:
+        """Fetch and append more popular movies from TMDB"""
+        new_movies_data = self.movie_api.get_popular_movies(page=page)
+        
+        if not new_movies_data:
+            return pd.DataFrame()
+            
+        new_movies = []
+        existing_titles = set(self.movies_df['title'].values) if self.movies_df is not None else set()
+        
+        for movie in new_movies_data:
+            if movie['title'] not in existing_titles:
+                new_movies.append(movie)
+        
+        if new_movies:
+            new_df = pd.DataFrame(new_movies)
+            # Ensure columns match
+            for col in self.movies_df.columns:
+                if col not in new_df.columns:
+                    new_df[col] = ''
+            
+            # Only keep columns that exist in movies_df to avoid mismatch
+            new_df = new_df[self.movies_df.columns]
+            
+            self.movies_df = pd.concat([self.movies_df, new_df], ignore_index=True)
+            self._update_content_features()
+            return new_df
+            
+        return pd.DataFrame()
+
     def get_hybrid_recommendations(
         self, 
         user_id: str, 

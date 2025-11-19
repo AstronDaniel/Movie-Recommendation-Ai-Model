@@ -1,0 +1,615 @@
+/* ============================================
+   Netflix-Style Professional UI
+   Movie Recommendation System
+   ============================================ */
+
+/* ===== Base Styles ===== */
+* {
+    box-sizing: border-box;
+}
+
+.stApp {
+    background-color: #141414;
+    color: #ffffff;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+}
+
+/* ===== Hide Streamlit Branding ===== */
+#MainMenu {
+    visibility: hidden;
+}
+
+footer {
+    visibility: hidden;
+}
+
+header {
+    /* visibility: hidden; */
+}
+
+/* ===== Main Container ===== */
+.main {
+    padding: 0;
+    background-color: #141414;
+}
+
+/* ===== Netflix Red Accent ===== */
+.netflix-red {
+    color: #E50914;
+}
+
+/* ===== Header/Navbar ===== */
+.netflix-header {
+    background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 50%, transparent 100%);
+    padding: 1.5rem 4rem;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.netflix-logo {
+    font-size: 2.5rem;
+    font-weight: 900;
+    color: #E50914;
+    font-family: 'Arial Black', 'Helvetica Neue', sans-serif;
+    letter-spacing: -2px;
+    text-transform: uppercase;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    transition: transform 0.2s ease;
+}
+
+.netflix-logo:hover {
+    transform: scale(1.05);
+}
+
+/* ===== Hero Section ===== */
+.hero-section {
+    background: linear-gradient(135deg, rgba(0,0,0,0.6) 0%, rgba(20,20,20,0.8) 50%, #141414 100%);
+    padding: 6rem 4rem;
+    margin-bottom: 3rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.hero-section::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(ellipse at center, rgba(229, 9, 20, 0.1) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+.hero-title {
+    font-size: 4rem;
+    font-weight: 800;
+    margin-bottom: 1.5rem;
+    color: #ffffff;
+    line-height: 1.1;
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
+    position: relative;
+    z-index: 1;
+}
+
+.hero-subtitle {
+    font-size: 1.5rem;
+    color: #d2d2d2;
+    margin-bottom: 2rem;
+    max-width: 700px;
+    font-weight: 300;
+    line-height: 1.5;
+    position: relative;
+    z-index: 1;
+}
+
+/* ===== Movie Row Container ===== */
+.movie-row {
+    margin: 3rem 0;
+    padding: 0 4rem;
+    width: 100%;
+    display: block !important;
+    box-sizing: border-box;
+}
+
+.movie-row * {
+    box-sizing: border-box;
+}
+
+/* Override Streamlit markdown wrappers */
+.stMarkdown .movie-row,
+div[data-testid="stMarkdownContainer"] .movie-row {
+    display: block !important;
+    width: 100% !important;
+}
+
+.row-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    color: #ffffff;
+    text-transform: capitalize;
+    letter-spacing: 0.5px;
+}
+
+/* ===== Horizontal Scrolling Container ===== */
+.movie-scroll-container {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    gap: 1.2rem;
+    padding: 1.5rem 0;
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+    scrollbar-color: #E50914 #2a2a2a;
+    width: 100%;
+    align-items: flex-start;
+}
+
+.movie-scroll-container > * {
+    flex-shrink: 0 !important;
+}
+
+.movie-scroll-container::-webkit-scrollbar {
+    height: 10px;
+}
+
+.movie-scroll-container::-webkit-scrollbar-track {
+    background: #2a2a2a;
+    border-radius: 5px;
+}
+
+.movie-scroll-container::-webkit-scrollbar-thumb {
+    background: #E50914;
+    border-radius: 5px;
+    transition: background 0.2s;
+}
+
+.movie-scroll-container::-webkit-scrollbar-thumb:hover {
+    background: #f40612;
+}
+
+/* ===== Movie Card ===== */
+.movie-card {
+    min-width: 220px !important;
+    max-width: 220px !important;
+    width: 220px !important;
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+    display: block !important;
+    background-color: #1a1a1a;
+    border-radius: 6px;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.movie-card:hover {
+    transform: scale(1.08) translateY(-8px);
+    box-shadow: 0 12px 24px rgba(229, 9, 20, 0.4);
+    z-index: 10;
+    border-color: rgba(229, 9, 20, 0.5);
+}
+
+.movie-poster {
+    width: 100%;
+    height: 320px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #E50914 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 4rem;
+    font-weight: 900;
+    position: relative;
+    overflow: hidden;
+}
+
+.movie-poster img,
+.movie-poster .poster-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+.movie-poster .poster-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    font-size: 4rem;
+    font-weight: 900;
+    color: white;
+    transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+.movie-poster::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.3) 100%);
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+/* Description overlay - hidden by default */
+.movie-description-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+    z-index: 5;
+}
+
+.description-text {
+    color: #ffffff;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    text-align: center;
+    font-weight: 400;
+}
+
+/* Hover effects */
+.movie-card:hover .movie-poster img,
+.movie-card:hover .movie-poster .poster-image,
+.movie-card:hover .movie-poster .poster-fallback {
+    opacity: 0.4;
+    filter: brightness(0.5);
+}
+
+.movie-card:hover .movie-poster::after {
+    opacity: 0;
+}
+
+.movie-card:hover .movie-description-overlay {
+    opacity: 1;
+    visibility: visible;
+}
+
+.movie-info {
+    padding: 1.2rem;
+    background-color: #1a1a1a;
+}
+
+.movie-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #ffffff;
+    margin-bottom: 0.6rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+}
+
+.movie-meta {
+    font-size: 0.875rem;
+    color: #b3b3b3;
+    line-height: 1.5;
+}
+
+.movie-meta div {
+    margin-bottom: 0.3rem;
+}
+
+.movie-rating {
+    color: #E50914;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+/* ===== Buttons ===== */
+.stButton > button {
+    background-color: #E50914;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 0.75rem 2rem;
+    font-weight: 600;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 6px rgba(229, 9, 20, 0.3);
+}
+
+.stButton > button:hover {
+    background-color: #f40612;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(229, 9, 20, 0.4);
+}
+
+.stButton > button:active {
+    transform: translateY(0);
+}
+
+/* ===== Tabs ===== */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 2.5rem;
+    background-color: transparent;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 0 4rem;
+    margin-bottom: 2rem;
+}
+
+.stTabs [data-baseweb="tab"] {
+    color: #b3b3b3;
+    font-weight: 500;
+    font-size: 1rem;
+    padding: 1rem 0;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stTabs [data-baseweb="tab"]:hover {
+    color: #ffffff;
+}
+
+.stTabs [aria-selected="true"] {
+    color: #ffffff;
+    border-bottom: 3px solid #E50914;
+    font-weight: 700;
+}
+
+/* ===== Form Elements ===== */
+.stTextInput > div > div > input {
+    background-color: #2a2a2a;
+    color: #ffffff;
+    border: 1px solid #404040;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+.stTextInput > div > div > input:focus {
+    border-color: #E50914;
+    box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.2);
+    outline: none;
+}
+
+.stSelectbox > div > div {
+    background-color: #2a2a2a;
+    color: #ffffff;
+    border: 1px solid #404040;
+    border-radius: 6px;
+}
+
+.stSelectbox > div > div:focus-within {
+    border-color: #E50914;
+    box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.2);
+}
+
+/* ===== Sidebar ===== */
+.css-1d391kg,
+[data-testid="stSidebar"] {
+    background-color: #141414;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+[data-testid="stSidebar"] h3 {
+    color: #ffffff;
+    font-weight: 700;
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+/* ===== Metrics ===== */
+.stMetric {
+    background-color: #1a1a1a;
+    padding: 1.5rem;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.3s ease;
+}
+
+.stMetric:hover {
+    background-color: #2a2a2a;
+    border-color: rgba(229, 9, 20, 0.3);
+}
+
+.stMetric label {
+    color: #b3b3b3;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.stMetric [data-testid="stMetricValue"] {
+    color: #ffffff;
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+/* ===== Alert Boxes ===== */
+.stInfo {
+    background-color: #1a1a1a;
+    border-left: 4px solid #E50914;
+    border-radius: 6px;
+    padding: 1rem 1.5rem;
+}
+
+.stSuccess {
+    background-color: rgba(26, 90, 26, 0.3);
+    border-left: 4px solid #4caf50;
+    border-radius: 6px;
+    padding: 1rem 1.5rem;
+}
+
+.stWarning {
+    background-color: rgba(90, 74, 26, 0.3);
+    border-left: 4px solid #ff9800;
+    border-radius: 6px;
+    padding: 1rem 1.5rem;
+}
+
+/* ===== Slider ===== */
+.stSlider {
+    color: #E50914;
+}
+
+.stSlider [data-baseweb="slider"] {
+    color: #E50914;
+}
+
+.stSlider [data-baseweb="slider"] [data-baseweb="track"] {
+    background-color: #2a2a2a;
+}
+
+.stSlider [data-baseweb="slider"] [data-baseweb="thumb"] {
+    background-color: #E50914;
+    border: 2px solid #ffffff;
+}
+
+/* ===== Radio Buttons ===== */
+.stRadio > div {
+    background-color: transparent;
+}
+
+.stRadio > div > label {
+    color: #ffffff;
+}
+
+.stRadio > div > label > div {
+    color: #b3b3b3;
+}
+
+/* ===== Divider ===== */
+hr {
+    border-color: #2a2a2a;
+    margin: 2rem 0;
+}
+
+/* ===== Rating Badge ===== */
+.rating-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #E50914 0%, #f40612 100%);
+    color: white;
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 700;
+    margin-top: 0.5rem;
+    box-shadow: 0 2px 4px rgba(229, 9, 20, 0.3);
+}
+
+/* ===== Typography ===== */
+h1, h2, h3, h4, h5, h6 {
+    color: #ffffff;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+h1 {
+    font-size: 2.5rem;
+}
+
+h2 {
+    font-size: 2rem;
+}
+
+h3 {
+    font-size: 1.5rem;
+}
+
+p {
+    color: #d2d2d2;
+    line-height: 1.6;
+}
+
+/* ===== Spinner ===== */
+.stSpinner > div {
+    border-color: #E50914;
+}
+
+/* ===== Responsive Design ===== */
+@media (max-width: 768px) {
+    .netflix-header {
+        padding: 1rem 2rem;
+    }
+    
+    .netflix-logo {
+        font-size: 1.8rem;
+    }
+    
+    .hero-section {
+        padding: 4rem 2rem;
+    }
+    
+    .hero-title {
+        font-size: 2.5rem;
+    }
+    
+    .hero-subtitle {
+        font-size: 1.2rem;
+    }
+    
+    .movie-row {
+        padding: 0 2rem;
+    }
+    
+    .movie-card {
+        min-width: 180px;
+        max-width: 180px;
+    }
+    
+    .movie-poster {
+        height: 260px;
+    }
+}
+
+/* ===== Smooth Animations ===== */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.movie-card {
+    animation: fadeIn 0.5s ease-out;
+}
+
+/* ===== Focus States for Accessibility ===== */
+button:focus,
+input:focus,
+select:focus {
+    outline: 2px solid #E50914;
+    outline-offset: 2px;
+}
+
+/* ===== Loading States ===== */
+.stSpinner {
+    color: #E50914;
+}
+
