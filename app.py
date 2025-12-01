@@ -244,10 +244,89 @@ def render_movie_grid(movies, recommender=None, key_prefix="grid"):
                         
     st.markdown('</div>', unsafe_allow_html=True)
 
+# Helper function to render classic recommendations
+def render_classic_recommendations(recommender, key_suffix=""):
+    # Choose recommendation type
+    rec_type = st.radio(
+        "Select recommendation type:",
+        ["Similar Movies", "Personalized", "Top Rated"],
+        horizontal=True,
+        key=f"rec_type_radio_{key_suffix}"
+    )
+    
+    if rec_type == "Similar Movies":
+        st.markdown("### Find movies similar to ones you like")
+        st.markdown("Select a movie you enjoyed and discover similar titles based on content similarity.")
+        
+        # Movie selection
+        all_movies = recommender.get_all_movies()
+        selected_movie = st.selectbox(
+            "Select a movie you enjoyed:",
+            options=all_movies['title'].tolist(),
+            key=f"similar_movie_select_{key_suffix}",
+            help="Choose a movie you liked to find similar recommendations"
+        )
+        
+        n_recommendations = st.slider("Number of recommendations", 3, 10, 5, key=f"similar_count_{key_suffix}")
+        
+        if st.button("Get Recommendations", key=f"content_rec_{key_suffix}", use_container_width=True):
+            with st.spinner("Finding similar movies..."):
+                recommendations = recommender.get_content_based_recommendations(
+                    selected_movie, 
+                    n_recommendations
+                )
+                
+                if recommendations:
+                    scores = [rec.get('similarity_score', 0) for rec in recommendations]
+                    st.markdown(f"### Movies similar to {selected_movie}")
+                    render_movie_grid(recommendations, recommender=recommender, key_prefix=f"similar_{key_suffix}")
+                else:
+                    st.warning("No recommendations found.")
+    
+    elif rec_type == "Personalized":
+        st.markdown("### Get recommendations based on your rating history")
+        st.markdown("Receive personalized recommendations based on your movie preferences and rating patterns.")
+        
+        if len(st.session_state.user_ratings) == 0:
+            st.info("You haven't rated any movies yet. Please rate some movies in the 'Rate Movies' tab to get personalized recommendations.")
+        else:
+            n_recommendations = st.slider("Number of recommendations", 3, 10, 5, key=f"personalized_count_{key_suffix}")
+            
+            if st.button("Get Personalized Recommendations", key=f"collab_rec_{key_suffix}", use_container_width=True):
+                # Add ratings to recommender
+                for movie, rating in st.session_state.user_ratings.items():
+                    recommender.add_user_rating(st.session_state.user_id, movie, rating)
+                
+                with st.spinner("Analyzing your preferences..."):
+                    recommendations = recommender.get_collaborative_recommendations(
+                        st.session_state.user_id,
+                        n_recommendations
+                    )
+                    
+                    if recommendations:
+                        scores = [rec.get('recommendation_score', 0) for rec in recommendations]
+                        st.markdown("### Personalized Recommendations For You")
+                        render_movie_grid(recommendations, recommender=recommender, key_prefix=f"personalized_{key_suffix}")
+    
+    else:  # Top Rated
+        st.markdown("### Popular and highly-rated movies")
+        st.markdown("Browse the most popular and highest-rated movies in our collection.")
+        
+        n_recommendations = st.slider("Number of movies to show", 3, 10, 5, key=f"top_rated_count_{key_suffix}")
+        
+        if st.button("Show Top Rated", key=f"top_rated_{key_suffix}", use_container_width=True):
+            all_movies = recommender.get_all_movies()
+            top_movies = all_movies.nlargest(n_recommendations, 'rating')
+            top_movies_list = top_movies.to_dict('records')
+            
+            st.markdown(f"### Top {n_recommendations} Rated Movies")
+            render_movie_grid(top_movies_list, recommender=recommender, key_prefix=f"top_rated_{key_suffix}")
+
 # Main content
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "Browse", 
-    "Recommendations", 
+    "AI Models",
+    "Classic Recommendations", 
     "Rate Movies",
     "My List"
 ])
@@ -369,141 +448,127 @@ with tab1:
                     st.warning("No more movies found.")
 
 with tab2:
-    # Choose recommendation type
-    rec_type = st.radio(
-        "Select recommendation type:",
-        ["Similar Movies", "Personalized", "Top Rated"],
-        horizontal=True
-    )
+    st.markdown("### 🧠 AI Model Recommendations")
+    st.markdown("""
+    Experience the power of **Neural Collaborative Filtering**. 
+    Our Hybrid AI model combines user behavior, movie content, genres, and release years to predict what you'll love.
+    """)
     
-    if rec_type == "Similar Movies":
-        st.markdown("### Find movies similar to ones you like")
-        st.markdown("Select a movie you enjoyed and discover similar titles based on content similarity.")
+    if not recommender.model_loaded:
+        with st.expander("⚠️ AI Model Status: Unavailable", expanded=False):
+            st.warning("The Neural Network model could not be loaded on this machine.")
+            if hasattr(recommender, 'model_load_error') and recommender.model_load_error:
+                st.code(f"Error: {recommender.model_load_error}")
+            st.info("Falling back to Classic Recommendation Engine.")
         
-        # Movie selection
-        all_movies = recommender.get_all_movies()
-        selected_movie = st.selectbox(
-            "Select a movie you enjoyed:",
-            options=all_movies['title'].tolist(),
-            key="similar_movie_select",
-            help="Choose a movie you liked to find similar recommendations"
-        )
+        st.markdown("---")
+        st.markdown("### 🎬 Classic Recommendations (Fallback)")
+        render_classic_recommendations(recommender, key_suffix="fallback")
+
+    else:
+        col1, col2 = st.columns([1, 2])
         
-        n_recommendations = st.slider("Number of recommendations", 3, 10, 5, key="similar_count")
-        
-        if st.button("Get Recommendations", key="content_rec", use_container_width=True):
-            with st.spinner("Finding similar movies..."):
-                recommendations = recommender.get_content_based_recommendations(
-                    selected_movie, 
-                    n_recommendations
-                )
-                
-                if recommendations:
-                    scores = [rec.get('similarity_score', 0) for rec in recommendations]
-                    st.markdown(f"### Movies similar to {selected_movie}")
-                    render_movie_grid(recommendations, recommender=recommender, key_prefix="similar")
-                else:
-                    st.warning("No recommendations found.")
-    
-    elif rec_type == "Personalized":
-        st.markdown("### Get recommendations based on your rating history")
-        st.markdown("Receive personalized recommendations based on your movie preferences and rating patterns.")
-        
-        if len(st.session_state.user_ratings) == 0:
-            st.info("You haven't rated any movies yet. Please rate some movies in the 'Rate Movies' tab to get personalized recommendations.")
-        else:
-            n_recommendations = st.slider("Number of recommendations", 3, 10, 5, key="personalized_count")
+        with col1:
+            st.markdown("#### Select Persona")
+            # Get a sample of users to show (first 100 to avoid huge list)
+            sample_users = recommender.user_encoder.classes_[:100]
+            selected_user = st.selectbox(
+                "View recommendations for User ID:",
+                sample_users,
+                key="ai_user_select",
+                help="Select a user from the dataset to see what the AI predicts for them."
+            )
             
-            if st.button("Get Personalized Recommendations", key="collab_rec", use_container_width=True):
-                # Add ratings to recommender
-                for movie, rating in st.session_state.user_ratings.items():
-                    recommender.add_user_rating(st.session_state.user_id, movie, rating)
-                
-                with st.spinner("Analyzing your preferences..."):
-                    recommendations = recommender.get_collaborative_recommendations(
-                        st.session_state.user_id,
-                        n_recommendations
-                    )
+            n_ai_recs = st.slider("Number of recommendations", 5, 20, 10, key="ai_count")
+            
+            if st.button("✨ Generate AI Recommendations", key="ai_gen_btn", use_container_width=True):
+                with st.spinner(f"Neural Network is predicting preferences for User {selected_user}..."):
+                    ai_recs = recommender.get_ai_recommendations(selected_user, n_ai_recs)
                     
-                    if recommendations:
-                        scores = [rec.get('recommendation_score', 0) for rec in recommendations]
-                        st.markdown("### Personalized Recommendations For You")
-                        render_movie_grid(recommendations, recommender=recommender, key_prefix="personalized")
-    
-    else:  # Top Rated
-        st.markdown("### Popular and highly-rated movies")
-        st.markdown("Browse the most popular and highest-rated movies in our collection.")
+                    if ai_recs:
+                        st.session_state.ai_recs = ai_recs
+                        st.session_state.ai_user = selected_user
+                    else:
+                        st.error("Could not generate recommendations.")
         
-        n_recommendations = st.slider("Number of movies to show", 3, 10, 5, key="top_rated_count")
-        
-        if st.button("Show Top Rated", key="top_rated", use_container_width=True):
-            all_movies = recommender.get_all_movies()
-            top_movies = all_movies.nlargest(n_recommendations, 'rating')
-            top_movies_list = top_movies.to_dict('records')
-            
-            st.markdown(f"### Top {n_recommendations} Rated Movies")
-            render_movie_grid(top_movies_list, recommender=recommender, key_prefix="top_rated")
+        with col2:
+            # Display results if they exist in session state
+            if 'ai_recs' in st.session_state and st.session_state.get('ai_user') == selected_user:
+                st.success(f"Top {len(st.session_state.ai_recs)} picks for User {selected_user}")
+                render_movie_grid(st.session_state.ai_recs, recommender=recommender, key_prefix="ai_results")
+            else:
+                st.info("👈 Select a user profile and click Generate to see AI predictions!")
 
 with tab3:
+    render_classic_recommendations(recommender, key_suffix="main")
+
+with tab4:
     st.markdown("### Rate Movies")
     st.markdown("Rate movies to improve your personalized recommendations. Your ratings help us understand your preferences better.")
     
     # Movie selection for rating
     all_movies = recommender.get_all_movies()
-    movie_to_rate = st.selectbox(
-        "Select a movie to rate:",
-        options=all_movies['title'].tolist(),
-        key="rate_movie_select",
-        help="Choose a movie you've watched to rate it"
-    )
     
-    # Display movie info
-    movie_info = all_movies[all_movies['title'] == movie_to_rate].iloc[0]
-    
-    # Show movie card - ensure description is included
-    movie_dict = movie_info.to_dict()
-    if 'description' not in movie_dict:
-        # Fallback: get description from the full movies_df if missing
-        full_movie = recommender.movies_df[recommender.movies_df['title'] == movie_to_rate]
-        if not full_movie.empty:
-            movie_dict['description'] = full_movie.iloc[0].get('description', 'No description available.')
-    
-    st.markdown("### Selected Movie")
-    render_movie_grid([movie_dict], recommender=recommender, key_prefix="rate_selected")
-    
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        st.markdown(f"""
-        **Genre:** {movie_info['genre']}  
-        **Year:** {movie_info['year']}  
-        **Director:** {movie_info['director']}  
-        **IMDB Rating:** {movie_info['rating']}/10
-        """)
-    
-    with col2:
-        # Check if already rated
-        current_rating = st.session_state.user_ratings.get(movie_to_rate, 3.0)
+    if all_movies.empty:
+        st.warning("Unable to load movies. Please check your internet connection or API key.")
+    else:
+        movie_to_rate = st.selectbox(
+            "Select a movie to rate:",
+            options=all_movies['title'].tolist(),
+            key="rate_movie_select",
+            help="Choose a movie you've watched to rate it"
+        )
         
-    # Rating slider
-    user_rating = st.slider(
-        "Your rating (0.5 - 5.0):",
-        min_value=0.5,
-        max_value=5.0,
-        value=float(current_rating),
-        step=0.5,
-        key="rating_slider"
-    )
-    
-    # Display rating value
-    st.markdown(f"### Rating: {user_rating}/5.0")
-    
-    # Submit rating
-    if st.button("Submit Rating", key="submit_rating", use_container_width=True):
-        st.session_state.user_ratings[movie_to_rate] = user_rating
-        st.success(f"Successfully rated **{movie_to_rate}** with {user_rating}/5.0!")
+        if movie_to_rate:
+            # Display movie info
+            movie_info = all_movies[all_movies['title'] == movie_to_rate].iloc[0]
+            
+            # Show movie card - ensure description is included
+            movie_dict = movie_info.to_dict()
+            if 'description' not in movie_dict:
+                # Fallback: get description from the full movies_df if missing
+                full_movie = recommender.movies_df[recommender.movies_df['title'] == movie_to_rate]
+                if not full_movie.empty:
+                    movie_dict['description'] = full_movie.iloc[0].get('description', 'No description available.')
+            
+            st.markdown("### Selected Movie")
+            render_movie_grid([movie_dict], recommender=recommender, key_prefix="rate_selected")
+            
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                st.markdown(f"""
+                **Genre:** {movie_info['genre']}  
+                **Year:** {movie_info['year']}  
+                **Director:** {movie_info['director']}  
+                **IMDB Rating:** {movie_info['rating']}/10
+                """)
+            
+            with col2:
+                # Check if already rated
+                current_rating = st.session_state.user_ratings.get(movie_to_rate, 3.0)
+                
+            # Rating slider
+            user_rating = st.slider(
+                "Your rating (0.5 - 5.0):",
+                min_value=0.5,
+                max_value=5.0,
+                value=float(current_rating),
+                step=0.5,
+                key="rating_slider"
+            )
+            
+            # Display rating value
+            st.markdown(f"### Rating: {user_rating}/5.0")
+            
+            # Submit rating
+            if st.button("Submit Rating", key="submit_rating", use_container_width=True):
+                recommender.add_user_rating(st.session_state.user_id, movie_to_rate, user_rating)
+                st.session_state.user_ratings[movie_to_rate] = user_rating
+                st.success(f"Rated '{movie_to_rate}' as {user_rating}/5.0")
+                st.rerun()
 
-with tab4:
+with tab5:
     st.markdown("### My List")
     
     if st.session_state.user_ratings:

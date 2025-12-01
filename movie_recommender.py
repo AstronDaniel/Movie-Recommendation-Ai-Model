@@ -7,7 +7,26 @@ import pandas as pd
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from typing import List, Dict, Tuple
+import os
+
+try:
+    import tensorflow as tf
+    TF_AVAILABLE = True
+except (ImportError, Exception) as e:
+    # Check for common Windows DLL error
+    error_str = str(e)
+    print(f"TensorFlow import error: {error_str}")
+    if "DLL load failed" in error_str:
+        print("\n[WARNING] TensorFlow could not be loaded (DLL load failed).")
+        print("To fix this, install the 'Microsoft Visual C++ Redistributable' for Visual Studio 2015-2022.")
+        print("Download: https://aka.ms/vs/17/release/vc_redist.x64.exe")
+        print("Continuing without AI features...\n")
+    else:
+        print(f"Warning: TensorFlow could not be imported. AI features will be disabled. Error: {e}")
+    TF_AVAILABLE = False
+
+from sklearn.preprocessing import LabelEncoder
+from typing import List, Dict, Tuple, Optional
 from movie_api import MovieAPI
 
 
@@ -22,8 +41,89 @@ class MovieRecommender:
         # API key is loaded from environment variable in MovieAPI
         self.movie_api = MovieAPI()
         self.poster_cache = {}  # Cache for poster URLs
+        
+        # AI Model attributes
+        self.ai_model = None
+        self.user_encoder = None
+        self.movie_encoder = None
+        self.genre_encoder = None
+        self.model_movies_df = None
+        self.model_loaded = False
+        self.model_load_error = None
+        
         self._initialize_movies()
         self._load_posters()
+        self._load_trained_model()
+
+    def _load_trained_model(self):
+        """Load the trained Keras model and encoders"""
+        if not TF_AVAILABLE:
+            self.model_load_error = "TensorFlow is not available (DLL load failed). Please install MS Visual C++ Redistributable."
+            print(f"Skipping model loading: {self.model_load_error}")
+            self.model_loaded = False
+            return
+
+        try:
+            model_dir = os.path.join(os.path.dirname(__file__), 'model_training')
+            
+            # Check if files exist
+            required_files = ['movie_model.h5', 'user_ids.npy', 'movie_ids.npy', 'genre_ids.npy', 'movies_processed.csv']
+            missing_files = []
+            for f in required_files:
+                if not os.path.exists(os.path.join(model_dir, f)):
+                    missing_files.append(f)
+            
+            if missing_files:
+                self.model_load_error = f"Missing model files: {', '.join(missing_files)}"
+                print(self.model_load_error)
+                self.model_loaded = False
+                return
+
+            # Load Model
+            self.ai_model = tf.keras.models.load_model(os.path.join(model_dir, 'movie_model.h5'))
+            
+            # Load Encoders
+            self.user_encoder = LabelEncoder()
+            self.user_encoder.classes_ = np.load(os.path.join(model_dir, 'user_ids.npy'), allow_pickle=True)
+            
+            self.movie_encoder = LabelEncoder()
+            self.movie_encoder.classes_ = np.load(os.path.join(model_dir, 'movie_ids.npy'), allow_pickle=True)
+            
+            self.genre_encoder = LabelEncoder()
+            self.genre_encoder.classes_ = np.load(os.path.join(model_dir, 'genre_ids.npy'), allow_pickle=True)
+            
+            # Load Processed Movies
+            self.model_movies_df = pd.read_csv(os.path.join(model_dir, 'movies_processed.csv'))
+            
+            # Pre-calculate normalized year for model input
+            if 'year' in self.model_movies_df.columns:
+                min_year = self.model_movies_df['year'].min()
+                max_year = self.model_movies_df['year'].max()
+                self.model_movies_df['year_norm'] = (self.model_movies_df['year'] - min_year) / (max_year - min_year)
+            
+            # Encode genres and movies for batch prediction
+            # We need to map the 'primary_genre' to the encoded value
+            # Note: LabelEncoder transforms based on the classes_ loaded
+            
+            # Create a mapping for faster lookups
+            self.genre_map = {label: i for i, label in enumerate(self.genre_encoder.classes_)}
+            self.movie_map = {label: i for i, label in enumerate(self.movie_encoder.classes_)}
+            
+            # Add encoded columns to model_movies_df
+            self.model_movies_df['genre_encoded'] = self.model_movies_df['primary_genre'].map(self.genre_map).fillna(0).astype(int)
+            
+            # Filter out movies that might not be in the encoder (shouldn't happen if files are consistent)
+            self.model_movies_df = self.model_movies_df[self.model_movies_df['movieId'].isin(self.movie_encoder.classes_)]
+            self.model_movies_df['movie_encoded'] = self.model_movies_df['movieId'].map(self.movie_map).astype(int)
+            
+            self.model_loaded = True
+            self.model_load_error = None
+            print("AI Model loaded successfully!")
+            
+        except Exception as e:
+            self.model_load_error = f"Error loading AI model: {str(e)}"
+            print(self.model_load_error)
+            self.model_loaded = False
         
     def _initialize_movies(self):
         """Initialize with popular movies from TMDB"""
@@ -417,4 +517,75 @@ class MovieRecommender:
         n = min(n, len(self.movies_df))
         random_movies = self.movies_df.sample(n=n)
         
-        return random_movies.to_dict('records')
+    def get_ai_recommendations(self, user_id: int, n_recommendations: int = 10) -> List[Dict]:
+        """
+        Get recommendations using the trained Neural Collaborative Filtering model.
+        
+        Args:
+            user_id: The ID of the user (from the training set) to predict for.
+            n_recommendations: Number of movies to return.
+        """
+        if not self.model_loaded or not TF_AVAILABLE:
+            return []
+            
+        try:
+            # Check if user_id exists in encoder
+            if user_id not in self.user_encoder.classes_:
+                print(f"User {user_id} not found in training data.")
+                return []
+                
+            # Encode User ID
+            user_encoded = np.where(self.user_encoder.classes_ == user_id)[0][0]
+            
+            # Prepare Inputs for ALL movies
+            n_movies = len(self.model_movies_df)
+            
+            # 1. User Input (Repeated)
+            user_input = np.full(n_movies, user_encoded)
+            
+            # 2. Movie Input
+            movie_input = self.model_movies_df['movie_encoded'].values
+            
+            # 3. Genre Input
+            genre_input = self.model_movies_df['genre_encoded'].values
+            
+            # 4. Year Input
+            year_input = self.model_movies_df['year_norm'].values
+            
+            # Predict
+            predictions = self.ai_model.predict(
+                [user_input, movie_input, genre_input, year_input], 
+                batch_size=1024, 
+                verbose=0
+            )
+            
+            # Add predictions to dataframe
+            results_df = self.model_movies_df.copy()
+            results_df['predicted_rating'] = predictions.flatten()
+            
+            # Sort by prediction
+            top_movies = results_df.nlargest(n_recommendations, 'predicted_rating')
+            
+            # Format results
+            recommendations = []
+            for _, row in top_movies.iterrows():
+                title = row['title']
+                # Try to get poster from our main app cache or API
+                poster_url = self.get_poster_url(title)
+                
+                recommendations.append({
+                    'title': title,
+                    'genre': row['genres'].replace('|', ', '),
+                    'year': int(row['year']),
+                    'rating': round(float(row['predicted_rating']), 1), # Use predicted rating
+                    'director': 'Unknown', # Not in training data
+                    'description': 'AI Recommended Movie', # We could fetch this if we wanted
+                    'poster_url': poster_url,
+                    'recommendation_score': round(float(row['predicted_rating']) * 20, 1) # Convert 5 scale to 100
+                })
+                
+            return recommendations
+            
+        except Exception as e:
+            print(f"Error generating AI recommendations: {e}")
+            return []
