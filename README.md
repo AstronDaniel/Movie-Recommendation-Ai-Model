@@ -14,8 +14,8 @@ A smart movie recommendation system that suggests movies you'll actually like, b
 ### **Development Workflow**
 ```mermaid
 graph LR
-    A["📊 Train & Test<br/>on Google Colab"] --> B["💾 Download<br/>Trained Models"]
-    B --> C["🌐 Integrate into<br/>Web App"]
+    A[" Train & Test<br/>on Google Colab"] --> B[" Download<br/>Trained Models"]
+    B --> C[" Integrate into<br/>Web App"]
     
     style A fill:#4285f4,stroke:#333,stroke-width:2px,color:#fff
     style B fill:#34a853,stroke:#333,stroke-width:2px,color:#fff
@@ -33,19 +33,22 @@ Think of it like having two smart friends helping you pick movies:
 
 ### **The Technical Flow**
 ```mermaid
-graph LR
-    A[🎬 User Input] --> B[👥 Find Similar<br/>Users]
-    B --> C[🎥 Find Similar<br/>Movies]
-    C --> D[🔀 Mix Results]
-    D --> E[🎨 Add Variety]
-    E --> F[⭐ Show Top 10]
+graph TB
+    A[User Input<br/><span style='font-size:0.85em; opacity:0.9'>Ratings & Preferences</span>] --> B[Collaborative Filtering<br/><span style='font-size:0.85em; opacity:0.9'>Analyze Similar Users</span>]
+    A --> C[Content-Based Filtering<br/><span style='font-size:0.85em; opacity:0.9'>Analyze Movie Attributes</span>]
     
-    style A fill:#e3f2fd
-    style B fill:#f3e5f5
-    style C fill:#f3e5f5
-    style D fill:#fff3e0
-    style E fill:#e8f5e9
-    style F fill:#fce4ec
+    B --> D[Hybrid Engine<br/><span style='font-size:0.85em; opacity:0.9'>Weighted Score Fusion</span>]
+    C --> D
+    
+    D --> E[Diversity Optimization<br/><span style='font-size:0.85em; opacity:0.9'>Genre Balance & Exploration</span>]
+    E --> F[Final Recommendations<br/><span style='font-size:0.85em; opacity:0.9'>Top 10 Personalized Results</span>]
+    
+    style A fill:#667eea,stroke:#4c63d2,stroke-width:3px,color:#fff,rx:10,ry:10
+    style B fill:#764ba2,stroke:#5a3a7d,stroke-width:2.5px,color:#fff,rx:10,ry:10
+    style C fill:#f093fb,stroke:#c975e8,stroke-width:2.5px,color:#fff,rx:10,ry:10
+    style D fill:#fa709a,stroke:#e05282,stroke-width:3px,color:#fff,rx:10,ry:10
+    style E fill:#feca57,stroke:#ee9c26,stroke-width:2.5px,color:#333,rx:10,ry:10
+    style F fill:#48dbfb,stroke:#2bb8d9,stroke-width:3px,color:#fff,rx:10,ry:10
 ```
 
 ## 📊 **Data We're Using**
@@ -331,7 +334,7 @@ graph TB
         I --> J[Display Results]
     end
     
-    E -.Download .pkl files.-> F
+    E -->|Download .pkl files| F
     
     style Colab fill:#e8eaf6,stroke:#3f51b5,stroke-width:2px
     style Local fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
