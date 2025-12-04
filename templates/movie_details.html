@@ -1,0 +1,55 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="details-hero" style="background-image: url('{{ movie.backdrop or movie.poster }}');">
+    <div class="details-overlay">
+        <div class="details-content">
+            <h1 class="details-title">{{ movie.title }}</h1>
+            <div class="details-meta">
+                <span>{{ movie.year }}</span>
+                {% if movie.rating %}
+                <span class="match-score">{{ (movie.rating * 10)|int }}% Match</span>
+                {% endif %}
+                <span>{{ movie.runtime }}m</span>
+                {% for g in movie.genres[:3] %}
+                <span>{{ g }}</span>
+                {% endfor %}
+            </div>
+            <p class="details-overview">{{ movie.overview }}</p>
+
+            <div style="display: flex; gap: 1rem;">
+                <button class="btn btn-white">
+                    <span>▶</span> Play
+                </button>
+                <button class="btn btn-glass">
+                    <span>ℹ</span> More Info
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if movie.trailer %}
+<div class="trailer-container">
+    <h2 class="section-title">Official Trailer</h2>
+    <iframe class="trailer-frame" src="https://www.youtube.com/embed/{{ movie.trailer }}?rel=0"
+        allowfullscreen></iframe>
+</div>
+{% endif %}
+
+{% if recommendations %}
+<section class="section">
+    <h2 class="section-title">More Like This</h2>
+    <div class="carousel-container">
+        <div class="carousel">
+            {% for m in recommendations %}
+            <a href="/movie/{{ m.movie_id }}?type=tmdb" class="movie-card">
+                <div class="poster" style="background-image: url('{{ m.poster }}');"></div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endif %}
+
+{% endblock %}

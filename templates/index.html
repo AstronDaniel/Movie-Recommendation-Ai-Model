@@ -1,0 +1,101 @@
+{% extends "layout.html" %}
+
+{% block content %}
+
+{% if search_results %}
+<!-- Search Results View -->
+<div class="section" style="margin-top: 6rem;">
+  <h2 class="section-title">Results for "{{ search_query }}"</h2>
+  <div class="carousel-container">
+    <div class="carousel" style="flex-wrap: wrap; overflow: visible;">
+      {% for m in search_results %}
+      <a href="/movie/{{ m.movie_id }}{% if not m.is_tmdb %}?type=internal{% endif %}" class="movie-card">
+        <div class="poster" style="background-image: url('{{ m.poster }}');"></div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{% else %}
+<!-- Home View -->
+<section class="hero" style="background-image: url('{{ trending[0].poster if trending else '' }}');">
+  <div class="hero-content">
+    <h1 class="hero-title">Unlimited Movies, TV Shows, and More</h1>
+    <p class="hero-desc">Watch anywhere. Cancel anytime. Just kidding, this is a demo.</p>
+
+    <form action="/search" method="get" class="search-container">
+      <input name="q" class="search-input" placeholder="Search for a movie..." required />
+      <button type="submit" class="search-btn">Search</button>
+    </form>
+  </div>
+</section>
+
+{% if trending %}
+<section class="section">
+  <h2 class="section-title">Trending Now</h2>
+  <div class="carousel-container">
+    <div class="carousel">
+      {% for m in trending %}
+      <a href="/movie/{{ m.movie_id }}?type=tmdb" class="movie-card">
+        <div class="poster" style="background-image: url('{{ m.poster }}');"></div>
+        <div class="card-info">
+          <h3 class="card-title">{{ m.title }}</h3>
+          <p class="card-desc">{{ m.overview }}</p>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+{% if top_picks %}
+<section class="section">
+  <h2 class="section-title">Top Picks for You (AI Rated)</h2>
+  <div class="carousel-container">
+    <div class="carousel">
+      {% for m in top_picks %}
+      <a href="/movie/{{ m.movie_id }}?type=internal" class="movie-card">
+        {% if m.poster %}
+        <div class="poster" style="background-image: url('{{ m.poster }}');"></div>
+        {% else %}
+        <div class="poster no-poster">🎬</div>
+        {% endif %}
+        <div class="card-info">
+          <h3 class="card-title">{{ m.title }}</h3>
+          <p class="card-desc">{{ m.overview }}</p>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+{% if featured %}
+<section class="section">
+  <h2 class="section-title">Featured Collection</h2>
+  <div class="carousel-container">
+    <div class="carousel">
+      {% for m in featured %}
+      <a href="/movie/{{ m.movie_id }}?type=internal" class="movie-card">
+        {% if m.poster %}
+        <div class="poster" style="background-image: url('{{ m.poster }}');"></div>
+        {% else %}
+        <div class="poster no-poster">🎬</div>
+        {% endif %}
+        <div class="card-info">
+          <h3 class="card-title">{{ m.title }}</h3>
+          <p class="card-desc">{{ m.overview }}</p>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+{% endif %}
+
+{% endblock %}

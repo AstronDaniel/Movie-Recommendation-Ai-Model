@@ -67,6 +67,21 @@ graph TB
 
 ## 🤖 **Our Machine Learning Approach**
 
+### **Learning Type: Supervised Learning**
+```mermaid
+graph LR
+    A[📊 Input:<br/>User-Movie Pairs] --> B[🎯 Label:<br/>Actual Ratings 1-5]
+    B --> C[🧠 Model Learns:<br/>Predict Ratings]
+    C --> D[✅ Output:<br/>Predicted Ratings]
+    
+    style A fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    style B fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    style C fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style D fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+```
+
+> **Why Supervised?** We have labeled data (actual user ratings), so the model learns by comparing its predictions to real ratings and improving over time.
+
 ### **System Architecture**
 ```mermaid
 graph TB

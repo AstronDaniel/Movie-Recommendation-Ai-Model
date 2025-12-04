@@ -1,0 +1,44 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<section class="section">
+  <div class="results-header">
+    <h2>Recommendations for user <span class="accent">{{ user_id }}</span></h2>
+    <a href="/" class="btn ghost">Back Home</a>
+  </div>
+
+  <div class="grid">
+    {% if recommendations %}
+    {% for r in recommendations %}
+    <article class="card">
+      {% if r.poster %}
+      <div class="poster"
+        style="background-image: url('{{ r.poster }}'); background-size: cover; background-position: center;"></div>
+      {% else %}
+      <div class="poster no-poster">
+        <span class="poster-placeholder">🎬</span>
+      </div>
+      {% endif %}
+      <div class="card-body">
+        <h3 class="movie-title">{{ r.title }}</h3>
+        <div class="meta">{{ r.genres }} {% if r.year %}• {{ r.year }}{% endif %}</div>
+        {% if r.tmdb_rating %}
+        <div class="rating">⭐ {{ '%.1f'|format(r.tmdb_rating) }}</div>
+        {% endif %}
+        {% if r.score is not none %}
+        <div class="score">Predicted: {{ '%.2f'|format(r.score) }} ⭐</div>
+        {% endif %}
+        {% if r.overview %}
+        <p class="overview">{{ r.overview[:80] }}{% if r.overview|length > 80 %}...{% endif %}</p>
+        {% endif %}
+      </div>
+    </article>
+    {% endfor %}
+    {% else %}
+    <div class="empty">No recommendations available. Try a different user id or ensure models are loaded in
+      <code>/models</code>.</div>
+    {% endif %}
+  </div>
+</section>
+
+{% endblock %}
