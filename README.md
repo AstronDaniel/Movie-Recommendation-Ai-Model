@@ -540,6 +540,10 @@ By completing this project, we'll understand:
 - How to evaluate ML model performance
 - How to work with APIs (TMDB, OMDB)
 
+### ** Thanks giving **
+- alright comrades that was good a presentation, let's hope for the best. Though time wasn't that a friend to us but regardless we have to move.
+- 
+
 ---
 
 *This README explains our movie recommendation system in simple terms. The workflow is: train on Colab → download models → integrate into web app.*
