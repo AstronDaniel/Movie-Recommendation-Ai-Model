@@ -60,6 +60,10 @@ graph TB
 | **TMDB API** | Movie posters, descriptions, cast | Makes recommendations look good |
 | **OMDB API** | IMDb ratings | Adds credibility to suggestions |
 
+### **Why use pre trained datasets**
+-**Eco friendly and reduced training time than starting from scratch.
+-**Provide a large data which takes long to collect incase of manual processes.
+
 ### **What Information We Track**
 - **About Users**: ID, age, preferences
 - **About Movies**: Title, genre, year, cast, director, plot, ratings
