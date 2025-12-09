@@ -60,6 +60,10 @@ graph TB
 | **TMDB API** | Movie posters, descriptions, cast | Makes recommendations look good |
 | **OMDB API** | IMDb ratings | Adds credibility to suggestions |
 
+### **Why use pre trained datasets**
+-**Eco friendly and reduced training time than starting from scratch.
+-**Provide a large data which takes long to collect incase of manual processes.
+
 ### **What Information We Track**
 - **About Users**: ID, age, preferences
 - **About Movies**: Title, genre, year, cast, director, plot, ratings
@@ -163,7 +167,7 @@ flowchart TD
 ```
 
 ### **Why Train on Colab?**
-- **Free GPU access** for faster training
+- **Free GPU access** for faster training and availability of strong hardware than local machines.
 - **Can experiment freely** without affecting our web app
 - **Easy to visualize** model performance at each step
 - **Notebook format** lets us explore the ML process step-by-step
