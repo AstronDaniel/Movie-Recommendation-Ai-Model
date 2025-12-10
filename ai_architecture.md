@@ -4,7 +4,7 @@
 CineMind AI is a hybrid movie recommendation system that combines **Collaborative Filtering (SVD)**, **Content-Based Filtering**, and **Real-Time API Data** to provide personalized and relevant movie suggestions.
 
 ## 1. The Hybrid Model
-The core recommendation engine is built on a hybrid approach to solve the "Cold Start" problem and provide diverse results.
+The core recommendation engine is built on a hybrid approach to solve the "Cold Start" problem and provide us with diverse results.
 
 ### A. Collaborative Filtering (SVD)
 - **Algorithm**: Singular Value Decomposition (SVD) from the `surprise` library.
